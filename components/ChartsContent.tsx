@@ -6,6 +6,7 @@ import {
   ReferenceLine, ResponsiveContainer, Legend,
 } from 'recharts';
 import type { DailyRecord, AppConfig } from '@/lib/types';
+import { computeDerivedSeries, formatSignedInt } from '@/lib/calc';
 
 const SNACK_LABELS: Record<string, string> = {
   none: 'なし', little: '少し', moderate: '多め', excessive: '過多',
@@ -26,9 +27,11 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 export default function ChartsContent({
   records,
   config,
+  period,
 }: {
   records: DailyRecord[];
   config: AppConfig;
+  period: number;
 }) {
   if (records.length === 0) {
     return (
@@ -38,18 +41,26 @@ export default function ChartsContent({
     );
   }
 
-  const data = records.map(r => ({
+  const derived = computeDerivedSeries(records).slice(-period);
+
+  const data = derived.map(r => ({
     date: r.date.slice(5),
     weight: r.weight,
+    movingAvgWeight: r.movingAvgWeight,
     sleep: r.sleepScore,
     steps: r.steps,
     pain: r.pain,
     mood: r.mood,
+    cumulativeCalorie: r.cumulativeCalorie,
   }));
 
-  const weights = records.map(r => r.weight);
-  const weightMin = Math.floor(Math.min(...weights) - 0.5);
-  const weightMax = Math.ceil(Math.max(...weights) + 0.5);
+  const weightValues = derived.flatMap(r =>
+    r.movingAvgWeight !== null ? [r.weight, r.movingAvgWeight] : [r.weight]
+  );
+  const weightMin = Math.floor(Math.min(...weightValues) - 0.5);
+  const weightMax = Math.ceil(Math.max(...weightValues) + 0.5);
+
+  const hasCalorieData = derived.some(r => r.cumulativeCalorie !== null);
 
   return (
     <div className="space-y-4">
@@ -59,7 +70,8 @@ export default function ChartsContent({
             <CartesianGrid strokeDasharray="3 3" stroke="#f3f4f6" />
             <XAxis dataKey="date" tick={{ fontSize: 10 }} />
             <YAxis domain={[weightMin, weightMax]} tick={{ fontSize: 10 }} />
-            <Tooltip formatter={(v: number) => [`${v.toFixed(1)}kg`, '体重']} />
+            <Tooltip formatter={(v: number, name: string) => [`${v.toFixed(1)}kg`, name]} />
+            <Legend wrapperStyle={{ fontSize: 11 }} />
             <ReferenceLine
               y={config.goalWeight}
               stroke="#ef4444"
@@ -69,13 +81,48 @@ export default function ChartsContent({
             <Line
               type="monotone"
               dataKey="weight"
+              name="実測体重"
               stroke="#3b82f6"
               strokeWidth={2}
               dot={{ r: 3, fill: '#3b82f6' }}
               activeDot={{ r: 5 }}
             />
+            <Line
+              type="monotone"
+              dataKey="movingAvgWeight"
+              name="7日移動平均"
+              stroke="#f97316"
+              strokeWidth={2}
+              strokeDasharray="5 3"
+              dot={false}
+              connectNulls={false}
+            />
           </LineChart>
         </ResponsiveContainer>
+      </Section>
+
+      <Section title="累積カロリー収支（kcal）">
+        {!hasCalorieData ? (
+          <p className="text-center text-gray-400 text-sm py-6">データがありません</p>
+        ) : (
+          <ResponsiveContainer width="100%" height={150}>
+            <LineChart data={data} margin={{ top: 4, right: 8, left: -16, bottom: 0 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#f3f4f6" />
+              <XAxis dataKey="date" tick={{ fontSize: 10 }} />
+              <YAxis tick={{ fontSize: 10 }} />
+              <Tooltip formatter={(v: number) => [`${formatSignedInt(v)}kcal`, '累積カロリー収支']} />
+              <Line
+                type="monotone"
+                dataKey="cumulativeCalorie"
+                stroke="#8b5cf6"
+                strokeWidth={2}
+                dot={{ r: 3, fill: '#8b5cf6' }}
+                activeDot={{ r: 5 }}
+                connectNulls={false}
+              />
+            </LineChart>
+          </ResponsiveContainer>
+        )}
       </Section>
 
       <Section title="睡眠スコア推移">
@@ -144,7 +191,7 @@ export default function ChartsContent({
               </tr>
             </thead>
             <tbody>
-              {records.map(r => (
+              {derived.map(r => (
                 <tr key={r.date} className="border-b border-gray-50">
                   <td className="py-1.5 text-gray-600">{r.date.slice(5)}</td>
                   <td className="text-center">{r.drinkHome ? '●' : '–'}</td>

@@ -13,6 +13,7 @@ export interface DailyRecord {
   mealSize: MealSize;
   steps: number;
   training: boolean;
+  calorieBalance?: number; // Huaweiヘルスの「カロリー収支」kcal。赤字はマイナス、黒字はプラス。未入力はundefined
 }
 
 export interface AppConfig {

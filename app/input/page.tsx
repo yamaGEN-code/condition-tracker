@@ -103,6 +103,7 @@ export default function InputPage() {
   const [mealSize, setMealSize] = useState<MealSize>('normal');
   const [steps, setSteps] = useState('');
   const [training, setTraining] = useState(false);
+  const [calorieBalance, setCalorieBalance] = useState('');
   const [saved, setSaved] = useState(false);
 
   useEffect(() => {
@@ -118,6 +119,9 @@ export default function InputPage() {
       setMealSize(existing.mealSize);
       setSteps(existing.steps.toString());
       setTraining(existing.training);
+      setCalorieBalance(
+        typeof existing.calorieBalance === 'number' ? existing.calorieBalance.toString() : ''
+      );
     } else {
       setWeight('');
       setSleepScore('');
@@ -129,10 +133,12 @@ export default function InputPage() {
       setMealSize('normal');
       setSteps('');
       setTraining(false);
+      setCalorieBalance('');
     }
   }, [date]);
 
   const handleSave = () => {
+    const parsedCalorie = parseInt(calorieBalance, 10);
     const record: DailyRecord = {
       date,
       weight: parseFloat(weight) || 0,
@@ -145,6 +151,8 @@ export default function InputPage() {
       mealSize,
       steps: parseInt(steps) || 0,
       training,
+      calorieBalance:
+        calorieBalance.trim() === '' || Number.isNaN(parsedCalorie) ? undefined : parsedCalorie,
     };
     saveRecord(record);
     setSaved(true);
@@ -179,6 +187,21 @@ export default function InputPage() {
               placeholder="例: 71.5"
               className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm"
             />
+          </Card>
+
+          <Card label="1日のカロリー収支（Huaweiヘルス）">
+            <input
+              type="number"
+              inputMode="numeric"
+              step="1"
+              value={calorieBalance}
+              onChange={e => setCalorieBalance(e.target.value)}
+              placeholder="例: -463"
+              className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm"
+            />
+            <p className="text-xs text-gray-400 mt-2">
+              Huawei Healthの「カロリー収支」を入力してください。赤字はマイナス、黒字はプラスで入力します。
+            </p>
           </Card>
 
           <Card label="睡眠スコア（Huaweiヘルス）">

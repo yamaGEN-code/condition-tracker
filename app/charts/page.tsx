@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import dynamic from 'next/dynamic';
 import BottomNav from '@/components/BottomNav';
-import { getRecentRecords, getConfig } from '@/lib/storage';
+import { getAllRecords, getConfig } from '@/lib/storage';
 import type { DailyRecord, AppConfig } from '@/lib/types';
 
 const ChartsContent = dynamic(() => import('@/components/ChartsContent'), { ssr: false });
@@ -17,11 +17,11 @@ export default function ChartsPage() {
 
   useEffect(() => {
     setConfig(getConfig());
-    setRecords(getRecentRecords(period));
-  }, [period]);
+    setRecords(getAllRecords());
+  }, []);
 
   return (
-    <div className="min-h-screen bg-gray-50 pb-20">
+    <div className="min-h-screen bg-gray-50 pb-24">
       <div className="max-w-md mx-auto px-4 pt-6">
         <h1 className="text-base font-bold text-gray-700 mb-4">グラフ</h1>
 
@@ -41,7 +41,7 @@ export default function ChartsPage() {
           ))}
         </div>
 
-        {config && <ChartsContent records={records} config={config} />}
+        {config && <ChartsContent records={records} config={config} period={period} />}
       </div>
       <BottomNav />
     </div>

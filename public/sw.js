@@ -1,10 +1,16 @@
-const CACHE = 'condition-tracker-v1';
+// キャッシュ名(CACHE)は Cache Storage のみを対象とする。localStorage/IndexedDB は
+// このスクリプトが一切触れない別ストレージなので、ここでの削除処理では消えない。
+const CACHE = 'condition-tracker-v3';
 const PRECACHE = ['/', '/input', '/charts', '/weekly'];
 
 self.addEventListener('install', (e) => {
   e.waitUntil(
     caches.open(CACHE).then(c => c.addAll(PRECACHE)).then(() => self.skipWaiting())
   );
+});
+
+self.addEventListener('message', (e) => {
+  if (e.data === 'SKIP_WAITING') self.skipWaiting();
 });
 
 self.addEventListener('activate', (e) => {

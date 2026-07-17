@@ -99,7 +99,7 @@ export default function TodayPage() {
   });
 
   return (
-    <div className="min-h-screen bg-gray-50 pb-20">
+    <div className="min-h-screen bg-gray-50 pb-24">
       <div className="max-w-md mx-auto px-4 pt-8">
         <h1 className="text-base font-bold text-gray-700 mb-1">コンディション管理</h1>
         <p className="text-xs text-gray-400 mb-6">{dateStr}</p>

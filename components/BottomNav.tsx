@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import { APP_VERSION } from '@/lib/version';
 
 const tabs = [
   { href: '/', label: '今日' },
@@ -30,6 +31,9 @@ export default function BottomNav() {
           </Link>
         ))}
       </div>
+      <p className="text-center text-[9px] text-gray-300 pb-0.5 leading-none">
+        v{APP_VERSION}
+      </p>
     </nav>
   );
 }

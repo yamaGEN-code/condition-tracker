@@ -2,8 +2,10 @@
 
 import { useState, useEffect } from 'react';
 import BottomNav from '@/components/BottomNav';
-import { getWeekRecords, getConfig } from '@/lib/storage';
-import type { DailyRecord, AppConfig } from '@/lib/types';
+import { getAllRecords, getConfig } from '@/lib/storage';
+import { computeDerivedSeries, formatSignedInt, formatSignedDecimal1 } from '@/lib/calc';
+import type { AppConfig, DailyRecord } from '@/lib/types';
+import type { DerivedRecord } from '@/lib/calc';
 
 function avg(arr: number[]): number {
   if (arr.length === 0) return 0;
@@ -28,10 +30,16 @@ function lastSunday(): string {
 }
 
 function buildGptText(
-  records: DailyRecord[],
+  records: DerivedRecord[],
   startDate: string,
   endDate: string,
   config: AppConfig,
+  weightAvgStats: {
+    startMovingAvg: number | null;
+    endMovingAvg: number | null;
+    movingAvgChange: number | null;
+  },
+  calorieStats: { calorieSum: number; calorieDays: number },
 ): string {
   const firstWeight = records[0]?.weight ?? 0;
   const lastWeight = records[records.length - 1]?.weight ?? 0;
@@ -43,6 +51,8 @@ function buildGptText(
   const avgSteps = avg(records.map(r => r.steps));
   const drinkHome = records.filter(r => r.drinkHome).length;
   const drinkOut = records.filter(r => r.drinkOut).length;
+  const { startMovingAvg, endMovingAvg, movingAvgChange } = weightAvgStats;
+  const { calorieSum, calorieDays } = calorieStats;
   const snack = {
     none: records.filter(r => r.snack === 'none').length,
     little: records.filter(r => r.snack === 'little').length,
@@ -68,6 +78,15 @@ ${fmt(startDate)}〜${fmt(endDate)}
 終了：${lastWeight.toFixed(1)}kg
 変化：${change >= 0 ? '+' : ''}${change.toFixed(1)}kg
 平均：${avgWeight.toFixed(1)}kg
+
+【7日移動平均体重】
+開始：${startMovingAvg !== null ? `${startMovingAvg.toFixed(1)}kg` : 'データ不足'}
+終了：${endMovingAvg !== null ? `${endMovingAvg.toFixed(1)}kg` : 'データ不足'}
+変化：${movingAvgChange !== null ? `${formatSignedDecimal1(movingAvgChange)}kg` : 'データ不足'}
+
+【カロリー収支】
+7日間合計：${calorieDays > 0 ? `${formatSignedInt(calorieSum)}kcal` : 'データ不足'}
+入力日数：${calorieDays}日／7日
 
 【睡眠】
 平均スコア：${Math.round(avgSleep)}点
@@ -111,21 +130,20 @@ function Row({ label, value }: { label: string; value: string | number }) {
 
 export default function WeeklyPage() {
   const [endDate, setEndDate] = useState(lastSunday());
-  const [records, setRecords] = useState<DailyRecord[]>([]);
+  const [allRecords, setAllRecords] = useState<DailyRecord[]>([]);
   const [config, setConfig] = useState<AppConfig | null>(null);
   const [copied, setCopied] = useState(false);
 
   useEffect(() => {
     setConfig(getConfig());
+    setAllRecords(getAllRecords());
   }, []);
-
-  useEffect(() => {
-    setRecords(getWeekRecords(endDate));
-  }, [endDate]);
 
   if (!config) return null;
 
   const startDate = addDays(endDate, -6);
+  const derivedAll = computeDerivedSeries(allRecords);
+  const records = derivedAll.filter(r => r.date >= startDate && r.date <= endDate);
   const hasData = records.length > 0;
 
   const firstWeight = records[0]?.weight ?? 0;
@@ -140,7 +158,27 @@ export default function WeeklyPage() {
   const drinkOut = records.filter(r => r.drinkOut).length;
   const training = records.filter(r => r.training).length;
 
-  const gptText = hasData ? buildGptText(records, startDate, endDate, config) : '';
+  const startMovingAvg = derivedAll.find(r => r.date === startDate)?.movingAvgWeight ?? null;
+  const endMovingAvg = derivedAll.find(r => r.date === endDate)?.movingAvgWeight ?? null;
+  const movingAvgChange =
+    startMovingAvg !== null && endMovingAvg !== null ? endMovingAvg - startMovingAvg : null;
+
+  const calorieEntries = records
+    .map(r => r.calorieBalance)
+    .filter((v): v is number => typeof v === 'number');
+  const calorieSum = calorieEntries.reduce((a, b) => a + b, 0);
+  const calorieDays = calorieEntries.length;
+
+  const gptText = hasData
+    ? buildGptText(
+        records,
+        startDate,
+        endDate,
+        config,
+        { startMovingAvg, endMovingAvg, movingAvgChange },
+        { calorieSum, calorieDays },
+      )
+    : '';
 
   const handleCopy = async () => {
     await navigator.clipboard.writeText(gptText);
@@ -149,7 +187,7 @@ export default function WeeklyPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 pb-20">
+    <div className="min-h-screen bg-gray-50 pb-24">
       <div className="max-w-md mx-auto px-4 pt-6">
         <h1 className="text-base font-bold text-gray-700 mb-4">週次集計</h1>
 
@@ -188,6 +226,33 @@ export default function WeeklyPage() {
                 />
                 <Row label="平均" value={`${avgWeight.toFixed(1)}kg`} />
               </div>
+            </div>
+
+            <div className="bg-white rounded-xl p-4 shadow-sm">
+              <p className="text-xs font-bold text-gray-400 mb-2">7日移動平均体重</p>
+              <div className="grid grid-cols-2 gap-x-4">
+                <Row
+                  label="開始"
+                  value={startMovingAvg !== null ? `${startMovingAvg.toFixed(1)}kg` : 'データ不足'}
+                />
+                <Row
+                  label="終了"
+                  value={endMovingAvg !== null ? `${endMovingAvg.toFixed(1)}kg` : 'データ不足'}
+                />
+                <Row
+                  label="変化"
+                  value={movingAvgChange !== null ? `${formatSignedDecimal1(movingAvgChange)}kg` : 'データ不足'}
+                />
+              </div>
+            </div>
+
+            <div className="bg-white rounded-xl p-4 shadow-sm">
+              <p className="text-xs font-bold text-gray-400 mb-2">カロリー収支</p>
+              <Row
+                label="7日間合計"
+                value={calorieDays > 0 ? `${formatSignedInt(calorieSum)}kcal` : 'データ不足'}
+              />
+              <Row label="入力日数" value={`${calorieDays}日／7日`} />
             </div>
 
             <div className="bg-white rounded-xl p-4 shadow-sm">
