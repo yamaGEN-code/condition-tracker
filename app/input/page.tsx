@@ -103,7 +103,8 @@ export default function InputPage() {
   const [mealSize, setMealSize] = useState<MealSize>('normal');
   const [steps, setSteps] = useState('');
   const [training, setTraining] = useState(false);
-  const [calorieBalance, setCalorieBalance] = useState('');
+  const [calorieDeficit, setCalorieDeficit] = useState(true);
+  const [calorieMagnitude, setCalorieMagnitude] = useState('');
   const [saved, setSaved] = useState(false);
 
   useEffect(() => {
@@ -119,9 +120,13 @@ export default function InputPage() {
       setMealSize(existing.mealSize);
       setSteps(existing.steps.toString());
       setTraining(existing.training);
-      setCalorieBalance(
-        typeof existing.calorieBalance === 'number' ? existing.calorieBalance.toString() : ''
-      );
+      if (typeof existing.calorieBalance === 'number') {
+        setCalorieDeficit(existing.calorieBalance < 0);
+        setCalorieMagnitude(Math.abs(existing.calorieBalance).toString());
+      } else {
+        setCalorieDeficit(true);
+        setCalorieMagnitude('');
+      }
     } else {
       setWeight('');
       setSleepScore('');
@@ -133,12 +138,21 @@ export default function InputPage() {
       setMealSize('normal');
       setSteps('');
       setTraining(false);
-      setCalorieBalance('');
+      setCalorieDeficit(true);
+      setCalorieMagnitude('');
     }
   }, [date]);
 
   const handleSave = () => {
-    const parsedCalorie = parseInt(calorieBalance, 10);
+    const trimmedMagnitude = calorieMagnitude.trim();
+    const parsedMagnitude = parseInt(trimmedMagnitude, 10);
+    const magnitude = Math.abs(parsedMagnitude);
+    const calorieBalance =
+      trimmedMagnitude === '' || Number.isNaN(parsedMagnitude)
+        ? undefined
+        : calorieDeficit && magnitude !== 0
+          ? -magnitude
+          : magnitude;
     const record: DailyRecord = {
       date,
       weight: parseFloat(weight) || 0,
@@ -151,8 +165,7 @@ export default function InputPage() {
       mealSize,
       steps: parseInt(steps) || 0,
       training,
-      calorieBalance:
-        calorieBalance.trim() === '' || Number.isNaN(parsedCalorie) ? undefined : parsedCalorie,
+      calorieBalance,
     };
     saveRecord(record);
     setSaved(true);
@@ -190,17 +203,40 @@ export default function InputPage() {
           </Card>
 
           <Card label="1日のカロリー収支（Huaweiヘルス）">
+            <div className="flex gap-2 mb-2">
+              <button
+                onClick={() => setCalorieDeficit(true)}
+                className={`flex-1 py-2 rounded-lg text-sm font-medium border transition-colors ${
+                  calorieDeficit
+                    ? 'bg-red-500 text-white border-red-500'
+                    : 'bg-gray-50 text-gray-600 border-gray-200'
+                }`}
+              >
+                赤字（マイナス）
+              </button>
+              <button
+                onClick={() => setCalorieDeficit(false)}
+                className={`flex-1 py-2 rounded-lg text-sm font-medium border transition-colors ${
+                  !calorieDeficit
+                    ? 'bg-blue-600 text-white border-blue-600'
+                    : 'bg-gray-50 text-gray-600 border-gray-200'
+                }`}
+              >
+                黒字（プラス）
+              </button>
+            </div>
             <input
               type="number"
               inputMode="numeric"
+              min="0"
               step="1"
-              value={calorieBalance}
-              onChange={e => setCalorieBalance(e.target.value)}
-              placeholder="例: -463"
+              value={calorieMagnitude}
+              onChange={e => setCalorieMagnitude(e.target.value)}
+              placeholder="例: 463"
               className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm"
             />
             <p className="text-xs text-gray-400 mt-2">
-              Huawei Healthの「カロリー収支」を入力してください。赤字はマイナス、黒字はプラスで入力します。
+              Huawei Healthの「カロリー収支」の数値部分を入力してください。赤字／黒字はボタンで選び、数字はマイナス記号なしで入力します（例: 赤字463kcalなら「赤字」を選んで「463」と入力）。
             </p>
           </Card>
 
